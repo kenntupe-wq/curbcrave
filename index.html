@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CurbCrave | Live Food Truck Finder & Map</title>
+<meta name="description" content="Find food trucks near you on a live map. See who's open right now, who's closing soon, and save your favorites.">
+<meta property="og:title" content="CurbCrave | Live Food Truck Finder & Map">
+<meta property="og:description" content="Find food trucks near you on a live map. See who's open right now and save your favorites.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0f766e">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --teal:#0f766e; --teal-d:#0b5a54; --yellow:#fbbf24; --ink:#1c1917; --muted:#6b645e;
+    --bg:#fffaf0; --card:#ffffff; --line:#eadfcb; --chip:#f5efe0; --green:#16a34a; --red:#b91c1c; --amber:#b45309;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --ink:#f5f1e8; --muted:#a8a095; --bg:#14110f; --card:#1f1b18; --line:#37312b; --chip:#2b2621; }
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+  a{color:inherit}
+  button{font-family:inherit}
+  .wrap{max-width:1200px;margin:0 auto;padding:0 20px}
+
+  header{background:var(--teal);color:#fff;position:sticky;top:0;z-index:1000}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:58px}
+  .logo{font-weight:900;font-size:1.4rem;letter-spacing:-.5px;text-decoration:none}
+  .logo span{color:var(--yellow)}
+  nav a{margin-left:20px;text-decoration:none;font-weight:600;font-size:.93rem;opacity:.92}
+  nav a:hover{opacity:1;text-decoration:underline}
+
+  .hero{background:linear-gradient(160deg,var(--teal) 0%,var(--teal-d) 100%);color:#fff;padding:48px 0 70px;text-align:center}
+  .hero h1{font-size:clamp(1.9rem,5vw,3.1rem);font-weight:900;letter-spacing:-1px;line-height:1.1}
+  .hero h1 em{font-style:normal;color:var(--yellow)}
+  .hero p{margin:12px auto 24px;max-width:540px;opacity:.92;font-size:1.05rem}
+  .search{display:flex;gap:8px;max-width:680px;margin:0 auto;background:#fff;padding:7px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .search input{flex:1;border:0;outline:0;font-size:1rem;padding:10px 12px;border-radius:8px;color:#1c1917;min-width:0;background:transparent}
+  .search button{border:0;background:var(--yellow);color:#1c1917;font-weight:800;padding:0 18px;border-radius:10px;cursor:pointer;font-size:.95rem;white-space:nowrap}
+  .search button:hover{filter:brightness(.95)}
+  .search .near{background:var(--teal);color:#fff}
+
+  main{margin-top:-36px;position:relative;z-index:2}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:0 4px 14px rgba(0,0,0,.06)}
+  .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .chip{border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:6px 13px;border-radius:999px;font-weight:600;font-size:.85rem;cursor:pointer}
+  .chip:hover{border-color:var(--teal)}
+  .chip.active{background:var(--teal);border-color:var(--teal);color:#fff}
+  .tools{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+  .tools label{display:flex;align-items:center;gap:7px;font-weight:600;font-size:.88rem;cursor:pointer;user-select:none}
+  .tools input[type=checkbox]{accent-color:var(--teal);width:17px;height:17px}
+  .tools select{padding:6px 10px;border-radius:8px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);font-size:.88rem;font-weight:600}
+  .tools .sp{margin-left:auto}
+  #clock{font-size:.85rem;color:var(--muted)}
+
+  .count{margin:20px 0 10px;font-weight:700;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+  .tabs{display:none;gap:6px}
+  .tabs button{border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:6px 16px;border-radius:999px;font-weight:700;cursor:pointer}
+  .tabs button.active{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+  .split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}
+  #map{height:calc(100vh - 90px);min-height:420px;border-radius:16px;border:1px solid var(--line);position:sticky;top:72px;z-index:1}
+  .list{display:flex;flex-direction:column;gap:14px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;transition:box-shadow .15s,border-color .15s;cursor:pointer}
+  .card:hover,.card.hl{box-shadow:0 8px 22px rgba(0,0,0,.12);border-color:var(--teal)}
+  .banner{width:92px;flex:none;display:flex;align-items:center;justify-content:center;font-size:2.6rem}
+  .body{padding:14px 16px;display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+  .row{display:flex;justify-content:space-between;align-items:start;gap:8px}
+  .card h3{font-size:1.1rem;letter-spacing:-.2px}
+  .badge{font-size:.7rem;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;text-transform:uppercase;letter-spacing:.4px}
+  .badge.open{background:#dcfce7;color:var(--green)}
+  .badge.soon{background:#fef3c7;color:var(--amber)}
+  .badge.closed{background:#fee2e2;color:var(--red)}
+  .meta{color:var(--muted);font-size:.88rem}
+  .desc{font-size:.9rem}
+  .tags{display:flex;flex-wrap:wrap;gap:5px}
+  .tag{background:var(--chip);padding:2px 8px;border-radius:6px;font-size:.76rem;font-weight:600}
+  .actions{display:flex;gap:7px;margin-top:4px;flex-wrap:wrap}
+  .btn{text-decoration:none;font-weight:700;font-size:.82rem;padding:7px 12px;border-radius:8px;border:1.5px solid var(--teal);color:var(--teal);background:transparent;cursor:pointer}
+  .btn.fill{background:var(--teal);color:#fff}
+  .btn:hover{filter:brightness(.92)}
+  .btn.fav.on{background:#fee2e2;border-color:#ef4444;color:#b91c1c}
+  .empty{text-align:center;padding:50px 20px;color:var(--muted);background:var(--card);border:1px dashed var(--line);border-radius:16px}
+
+  .pin{display:grid;place-items:center;width:38px;height:38px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);font-size:18px}
+  .pin span{transform:rotate(45deg)}
+  .pin.open{background:#16a34a}.pin.soon{background:#d97706}.pin.closed{background:#78716c}
+
+  section.band{padding:64px 0}
+  section h2{font-size:1.9rem;letter-spacing:-.5px;margin-bottom:6px}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-top:22px}
+  .step{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .step .n{width:34px;height:34px;border-radius:50%;background:var(--yellow);color:#1c1917;font-weight:900;display:grid;place-items:center;margin-bottom:8px}
+
+  .vendor{background:#1c1917;color:#fff;border-radius:22px;padding:42px;display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center}
+  .vendor p{opacity:.85;margin:8px 0 14px}
+  .vendor ul{list-style:none}
+  .vendor li:before{content:"✓ ";color:var(--yellow);font-weight:900}
+  form.vf{display:flex;flex-direction:column;gap:10px}
+  form.vf input,form.vf select{padding:12px;border-radius:9px;border:0;font-size:1rem;width:100%}
+  form.vf button{border:0;background:var(--yellow);color:#1c1917;font-weight:800;padding:13px;border-radius:9px;font-size:1rem;cursor:pointer}
+  .note{font-size:.85rem;opacity:.8;min-height:1.2em}
+
+  footer{background:var(--teal-d);color:#fff;padding:28px 0;text-align:center;font-size:.9rem}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:#1c1917;color:#fff;padding:10px 18px;border-radius:999px;font-weight:600;font-size:.9rem;transition:transform .25s;z-index:3000}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+
+  @media(max-width:860px){
+    .split{grid-template-columns:1fr}
+    .tabs{display:flex}
+    #map{display:none;height:70vh;position:relative;top:0}
+    .split.show-map #map{display:block}
+    .split.show-map .list{display:none}
+    .vendor{grid-template-columns:1fr;padding:26px}
+    .tools .sp{margin-left:0}
+    .search .near{display:none}
+    nav a{margin-left:12px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="#">Curb<span>Crave</span></a>
+    <nav>
+      <a href="#trucks">Trucks</a>
+      <a href="#how">How it works</a>
+      <a href="#vendors">For vendors</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <h1>Your next meal is <em>on wheels.</em></h1>
+    <p>A live map of food trucks near you. See who's open right now, who's closing soon, and save your favorites.</p>
+    <form class="search" id="searchForm">
+      <input id="q" type="search" placeholder="Search city, truck, cuisine, or dish..." aria-label="Search trucks">
+      <button type="button" class="near" id="nearBtn">📍 Near me</button>
+      <button type="submit">Search</button>
+    </form>
+  </div>
+</div>
+
+<main class="wrap" id="trucks">
+  <div class="panel">
+    <div class="filters" id="chips"></div>
+    <div class="tools">
+      <label><input type="checkbox" id="openOnly"> Open now</label>
+      <label><input type="checkbox" id="favOnly"> ♥ Saved only</label>
+      <label>Sort
+        <select id="sort">
+          <option value="smart">Open first</option>
+          <option value="near">Nearest</option>
+          <option value="az">A to Z</option>
+        </select>
+      </label>
+      <span class="sp" id="clock"></span>
+    </div>
+  </div>
+
+  <div class="count">
+    <span id="count"></span>
+    <div class="tabs" id="tabs">
+      <button class="active" data-v="list">List</button>
+      <button data-v="map">Map</button>
+    </div>
+  </div>
+
+  <div class="split" id="split">
+    <div class="list" id="list"></div>
+    <div id="map" aria-label="Map of food trucks"></div>
+  </div>
+</main>
+
+<section class="band" id="how">
+  <div class="wrap">
+    <h2>How CurbCrave works</h2>
+    <p class="meta">Street food, zero guesswork.</p>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><h3>Find</h3><p class="meta">Search, filter by cuisine, or tap Near me.</p></div>
+      <div class="step"><div class="n">2</div><h3>Check live status</h3><p class="meta">Open, closing soon, or closed, based on real hours.</p></div>
+      <div class="step"><div class="n">3</div><h3>Go eat</h3><p class="meta">Get directions, save favorites, share with friends.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="vendors" style="padding-top:0">
+  <div class="wrap">
+    <div class="vendor">
+      <div>
+        <h2>Own a food truck?</h2>
+        <p>Get in front of hungry customers who are already searching for you.</p>
+        <ul>
+          <li>Free basic listing</li>
+          <li>Show up live on the map with your hours</li>
+          <li>Link your menu and socials</li>
+        </ul>
+      </div>
+      <form class="vf" id="vendorForm">
+        <input name="truck" placeholder="Truck name" required>
+        <input name="city" placeholder="City, State" required>
+        <select name="cuisine" required>
+          <option value="">Cuisine type</option>
+          <option>Tacos &amp; Mexican</option><option>BBQ</option><option>Burgers</option>
+          <option>Asian</option><option>Pizza</option><option>Desserts</option><option>Other</option>
+        </select>
+        <input name="email" type="email" placeholder="Contact email" required>
+        <button type="submit">Request a listing</button>
+        <div class="note" id="vendorNote"></div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer><div class="wrap">© <span id="yr"></span> CurbCrave. Support your local food trucks. 🚚</div></footer>
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ------------------------------------------------------------------
+   DATA. Replace with real trucks here, OR drop a trucks.json file next
+   to index.html (same fields, an array) and it will load automatically.
+   days: 0=Sun ... 6=Sat | start/end: 24h decimal (11.5 = 11:30am)
+------------------------------------------------------------------ */
+let TRUCKS = [
+  {id:1,name:"Salsa Sunrise",   cuisine:"Tacos & Mexican", emoji:"🌮", color:"#fde68a", city:"Salt Lake City, UT", where:"900 S State St",        lat:40.7490,lng:-111.8880, days:[1,2,3,4,5,6], start:11, end:20, price:"$",  desc:"Street tacos on handmade tortillas.",        tags:["Tacos","Vegetarian options"]},
+  {id:2,name:"Smoke & Wheel",   cuisine:"BBQ",             emoji:"🍖", color:"#fecaca", city:"Salt Lake City, UT", where:"Library Square",        lat:40.7580,lng:-111.8830, days:[2,3,4,5],     start:11, end:15, price:"$$", desc:"Slow-smoked brisket and ribs, gone by 3.",   tags:["Brisket","Ribs"]},
+  {id:3,name:"The Patty Wagon", cuisine:"Burgers",         emoji:"🍔", color:"#fed7aa", city:"Provo, UT",          where:"Center St & University",lat:40.2338,lng:-111.6585, days:[1,2,3,4,5,6], start:12, end:21, price:"$",  desc:"Smash burgers and hand-cut fries.",          tags:["Smash burgers","Fries"]},
+  {id:4,name:"Noodle Nomad",    cuisine:"Asian",           emoji:"🍜", color:"#bbf7d0", city:"Ogden, UT",          where:"25th Street",           lat:41.2230,lng:-111.9740, days:[3,4,5,6,0],   start:11, end:19, price:"$$", desc:"Rich ramen and pan-fried dumplings.",        tags:["Ramen","Dumplings"]},
+  {id:5,name:"Fire & Dough",    cuisine:"Pizza",           emoji:"🍕", color:"#fecdd3", city:"Park City, UT",      where:"Main Street Lot",       lat:40.6461,lng:-111.4980, days:[4,5,6,0],     start:16, end:22, price:"$$", desc:"Wood-fired pies with a vegan cheese option.",tags:["Wood-fired","Vegan"]},
+  {id:6,name:"Sugar Rush",      cuisine:"Desserts",        emoji:"🍩", color:"#e9d5ff", city:"Salt Lake City, UT", where:"Liberty Park",          lat:40.7461,lng:-111.8736, days:[0,3,4,5,6],   start:13, end:23.5,price:"$", desc:"Fresh donuts and thick milkshakes.",         tags:["Donuts","Shakes"]},
+  {id:7,name:"Seoul Wheels",    cuisine:"Asian",           emoji:"🥟", color:"#bae6fd", city:"Salt Lake City, UT", where:"Gateway Plaza",         lat:40.7680,lng:-111.9050, days:[1,2,3,4,5],   start:11, end:18, price:"$$", desc:"Korean BBQ bowls and crispy mandu.",         tags:["Korean BBQ","Bowls"]},
+  {id:8,name:"El Camión Verde", cuisine:"Tacos & Mexican", emoji:"🌯", color:"#d9f99d", city:"Provo, UT",          where:"Freedom Blvd",          lat:40.2420,lng:-111.6640, days:[1,2,3,4,5,6], start:7,  end:15, price:"$",  desc:"Breakfast burritos and weekday lunch plates.",tags:["Burritos","Breakfast"]}
+];
+
+const $ = id => document.getElementById(id);
+const DAY = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+let activeCuisine = 'All', userPos = null, favs = [], map, markers = {}, userMarker = null;
+
+try{ favs = JSON.parse(localStorage.getItem('curbcrave_favs') || '[]'); }catch(e){}
+function saveFavs(){ try{ localStorage.setItem('curbcrave_favs', JSON.stringify(favs)); }catch(e){} }
+
+function esc(s){ const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmt(h){
+  const hh = Math.floor(h) % 24, mm = Math.round((h % 1) * 60);
+  const ap = hh >= 12 ? 'pm' : 'am', x = hh % 12 === 0 ? 12 : hh % 12;
+  return x + (mm ? ':' + String(mm).padStart(2,'0') : '') + ap;
+}
+function daysText(d){
+  const s = [...d].sort();
+  if (s.length === 7) return 'Daily';
+  const mf = [1,2,3,4,5];
+  if (s.length === 5 && mf.every(x => s.includes(x))) return 'Mon to Fri';
+  return s.map(x => DAY[x]).join(', ');
+}
+function status(t, now = new Date()){
+  const h = now.getHours() + now.getMinutes() / 60;
+  if (t.days.includes(now.getDay()) && h >= t.start && h < t.end){
+    return (t.end - h <= 1) ? {k:'soon', label:'Closing soon'} : {k:'open', label:'Open now'};
+  }
+  return {k:'closed', label:'Closed'};
+}
+function miles(a, b, c, d){
+  const R = 3958.8, r = x => x * Math.PI / 180;
+  const dLat = r(c - a), dLng = r(d - b);
+  const x = Math.sin(dLat/2)**2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function toast(m){ const t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2200); }
+
+/* ---------- Filtering, sorting ---------- */
+function visible(){
+  const q = $('q').value.trim().toLowerCase();
+  let list = TRUCKS.filter(t => {
+    if (activeCuisine !== 'All' && t.cuisine !== activeCuisine) return false;
+    if ($('openOnly').checked && status(t).k === 'closed') return false;
+    if ($('favOnly').checked && !favs.includes(t.id)) return false;
+    if (!q) return true;
+    return [t.name, t.cuisine, t.city, t.where, t.desc, ...t.tags].join(' ').toLowerCase().includes(q);
+  });
+  list.forEach(t => t._d = userPos ? miles(userPos.lat, userPos.lng, t.lat, t.lng) : null);
+  const s = $('sort').value, rank = {open:0, soon:1, closed:2};
+  if (s === 'near' && userPos) list.sort((a,b) => a._d - b._d);
+  else if (s === 'az') list.sort((a,b) => a.name.localeCompare(b.name));
+  else list.sort((a,b) => rank[status(a).k] - rank[status(b).k] || (userPos ? a._d - b._d : a.name.localeCompare(b.name)));
+  return list;
+}
+
+/* ---------- Render ---------- */
+function render(){
+  const list = visible();
+  $('count').textContent = list.length + (list.length === 1 ? ' truck' : ' trucks');
+  $('list').innerHTML = list.length ? list.map(t => {
+    const st = status(t), saved = favs.includes(t.id);
+    const dir = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(t.lat + ',' + t.lng);
+    return `
+    <article class="card" data-id="${t.id}">
+      <div class="banner" style="background:${t.color}">${t.emoji}</div>
+      <div class="body">
+        <div class="row"><h3>${esc(t.name)}</h3><span class="badge ${st.k}">${st.label}</span></div>
+        <div class="desc">${esc(t.desc)}</div>
+        <div class="meta">📍 ${esc(t.where)}, ${esc(t.city)}${t._d != null ? ' · <b>' + t._d.toFixed(1) + ' mi</b>' : ''}</div>
+        <div class="meta">🕒 ${daysText(t.days)} · ${fmt(t.start)} to ${fmt(t.end)} · ${esc(t.price)}</div>
+        <div class="tags">${[t.cuisine, ...t.tags].map(x => `<span class="tag">${esc(x)}</span>`).join('')}</div>
+        <div class="actions">
+          <a class="btn fill" href="${dir}" target="_blank" rel="noopener">Directions</a>
+          <button class="btn fav ${saved ? 'on' : ''}" data-act="fav">${saved ? '♥ Saved' : '♡ Save'}</button>
+          <button class="btn" data-act="share">Share</button>
+        </div>
+      </div>
+    </article>`;
+  }).join('') : '<div class="empty"><h3>No trucks match</h3><p>Try another city, or clear a filter.</p></div>';
+  drawMarkers(list);
+}
+
+function drawMarkers(list){
+  if (!map) return;
+  Object.values(markers).forEach(m => map.removeLayer(m));
+  markers = {};
+  list.forEach(t => {
+    const st = status(t).k;
+    const icon = L.divIcon({className:'', html:`<div class="pin ${st}"><span>${t.emoji}</span></div>`, iconSize:[38,38], iconAnchor:[19,38], popupAnchor:[0,-34]});
+    const m = L.marker([t.lat, t.lng], {icon}).addTo(map)
+      .bindPopup(`<b>${esc(t.name)}</b><br>${esc(t.where)}<br>${status(t).label} · ${fmt(t.start)} to ${fmt(t.end)}`);
+    m.on('click', () => highlight(t.id, true));
+    markers[t.id] = m;
+  });
+  if (list.length && !userPos){
+    map.fitBounds(L.latLngBounds(list.map(t => [t.lat, t.lng])).pad(0.25), {maxZoom:12});
+  }
+}
+
+function highlight(id, scroll){
+  document.querySelectorAll('.card.hl').forEach(c => c.classList.remove('hl'));
+  const c = document.querySelector(`.card[data-id="${id}"]`);
+  if (c){ c.classList.add('hl'); if (scroll) c.scrollIntoView({behavior:'smooth', block:'center'}); }
+}
+
+/* ---------- Events ---------- */
+$('list').addEventListener('click', e => {
+  const card = e.target.closest('.card'); if (!card) return;
+  const id = +card.dataset.id, t = TRUCKS.find(x => x.id === id), act = e.target.dataset.act;
+  if (act === 'fav'){
+    favs = favs.includes(id) ? favs.filter(x => x !== id) : [...favs, id];
+    saveFavs(); render(); toast(favs.includes(id) ? 'Saved to favorites' : 'Removed from favorites');
+  } else if (act === 'share'){
+    const text = `${t.name} on CurbCrave: ${t.where}, ${t.city}`;
+    if (navigator.share) navigator.share({title:t.name, text, url:location.href}).catch(() => {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(text + ' ' + location.href).then(() => toast('Link copied'));
+  } else if (!e.target.closest('a')){
+    highlight(id, false);
+    if (window.matchMedia('(max-width:860px)').matches) setView('map');
+    map.setView([t.lat, t.lng], 14);
+    markers[id] && markers[id].openPopup();
+  }
+});
+
+function setView(v){
+  $('split').classList.toggle('show-map', v === 'map');
+  [...$('tabs').children].forEach(b => b.classList.toggle('active', b.dataset.v === v));
+  if (v === 'map') setTimeout(() => map.invalidateSize(), 50);
+}
+$('tabs').addEventListener('click', e => { if (e.target.dataset.v) setView(e.target.dataset.v); });
+
+function buildChips(){
+  const cs = ['All', ...new Set(TRUCKS.map(t => t.cuisine))];
+  $('chips').innerHTML = '';
+  cs.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (c === activeCuisine ? ' active' : '');
+    b.textContent = c;
+    b.onclick = () => { activeCuisine = c; buildChips(); render(); };
+    $('chips').appendChild(b);
+  });
+}
+
+$('searchForm').addEventListener('submit', e => { e.preventDefault(); render(); $('trucks').scrollIntoView({behavior:'smooth'}); });
+$('q').addEventListener('input', render);
+$('openOnly').addEventListener('change', render);
+$('favOnly').addEventListener('change', render);
+$('sort').addEventListener('change', () => {
+  if ($('sort').value === 'near' && !userPos) locate(); else render();
+});
+$('nearBtn').addEventListener('click', locate);
+
+function locate(){
+  if (!navigator.geolocation){ toast('Location is not supported here'); $('sort').value = 'smart'; return; }
+  toast('Finding you...');
+  navigator.geolocation.getCurrentPosition(p => {
+    userPos = {lat:p.coords.latitude, lng:p.coords.longitude};
+    $('sort').value = 'near';
+    if (userMarker) map.removeLayer(userMarker);
+    userMarker = L.circleMarker([userPos.lat, userPos.lng], {radius:9, color:'#fff', weight:3, fillColor:'#2563eb', fillOpacity:1}).addTo(map).bindPopup('You are here');
+    map.setView([userPos.lat, userPos.lng], 11);
+    render();
+    $('trucks').scrollIntoView({behavior:'smooth'});
+  }, () => { toast('Could not get your location'); $('sort').value = 'smart'; }, {timeout:10000});
+}
+
+/* Vendor form: opens an email draft. Swap for Formspree / a Cloudflare Worker later. */
+$('vendorForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const body = `Truck: ${f.get('truck')}\nCity: ${f.get('city')}\nCuisine: ${f.get('cuisine')}\nEmail: ${f.get('email')}`;
+  location.href = 'mailto:hello@yourdomain.com?subject=' + encodeURIComponent('CurbCrave listing request') + '&body=' + encodeURIComponent(body);
+  $('vendorNote').textContent = 'Opening your email app...';
+});
+
+/* ---------- Init ---------- */
+function tickClock(){
+  $('clock').textContent = 'Live status as of ' + new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+}
+async function init(){
+  $('yr').textContent = new Date().getFullYear();
+  map = L.map('map', {scrollWheelZoom:false}).setView([40.7608, -111.8910], 9);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+  map.on('click', () => map.scrollWheelZoom.enable());
+  try{
+    const r = await fetch('trucks.json', {cache:'no-cache'});
+    if (r.ok){ const d = await r.json(); if (Array.isArray(d) && d.length) TRUCKS = d; }
+  }catch(e){ /* no trucks.json: use the sample data above */ }
+  buildChips(); render(); tickClock();
+  setInterval(() => { tickClock(); render(); }, 60000);
+}
+init();
+</script>
+</body>
+</html>
